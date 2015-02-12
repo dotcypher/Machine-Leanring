@@ -1,0 +1,98 @@
+---
+title: "Machine Learning Course Project"
+author: "Dotcypher"
+date: "15 Feb 2015"
+output: html_document
+---
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://groupware.les.inf.puc-rio.br/har) see the section on the Weight Lifting Exercise Dataset).
+
+### Data
+
+The training data for this project are available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+The test data are available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+The data for this project come from this [source](http://groupware.les.inf.puc-rio.br/har)
+
+**R Packages and configuration for this Analysis**
+
+```{r, echo=TRUE}
+library(caret)
+library(rpart)
+library(rattle)
+library(randomForest)
+
+set.seed(888)
+```
+
+**Loading Training and Testing Data sets**
+
+```{r, echo=TRUE}
+training = read.csv("pml-training.csv")
+testing = read.csv("pml-testing.csv")
+
+# Exploratory Analysis and Summary
+str(training)
+summary(training)
+```
+I found out there are quite a number of variables that has NA values.
+Remove any columns that contain entirely NAs
+```{r}
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+```
+Remove variables that does not help. for this case. the id which is X and username
+```{r}
+training <- training[,c(-1,-2,-3,-4,-5)]
+testing <- testing[,c(-1,-2,-3,-4,-5)]
+```
+
+Identifiying Near Zero Variate and see if possible to remove from predictors.
+Applying Near Zero Variances
+```{r, echo=TRUE}
+training.nzv = nearZeroVar(training, saveMetrics = TRUE)
+testing.nzv = nearZeroVar(testing, saveMetrics = TRUE)
+names(training[,training.nzv$nzv == TRUE])
+```
+
+As these variables are near zero variances, I will be removing these from the predictors.
+```{r, echo=TRUE}
+testing <- testing[,testing.nzv$nzv == FALSE]
+training <- training[,training.nzv$nzv == FALSE]
+```
+
+### Seperating Dataset into training and validation sets
+Notice there are only 20 observation from testing dataset, I decided to split the training and new test set. 60/40.
+```{r}
+inTrain <- createDataPartition(y = training$classe, p=0.6,, list = FALSE)
+training.new <- training[inTrain,]
+testing.new <- training[-inTrain,]
+```
+
+### Fit a Model using Random Forest and Trees
+```{r}
+# Random Forest
+modelFit.rf <- randomForest(classe ~., data = training.new, importance = TRUE)
+predictions.rf <- predict(modelFit.rf, testing.new, type="class")
+results.rf <- confusionMatrix(predictions.rf, testing.new$classe)
+
+# Decision Trees
+modelFit.rpart <- rpart(classe ~ ., data=training.new, method="class")
+predictions.rpart <- predict(modelFit.rpart, testing.new, type = "class")
+results.rpart <- confusionMatrix(predictions.rpart, testing.new$classe)
+
+```
+### Results
+```{r}
+results.rf
+results.rpart
+```
+*Out-of sample Sample Accuracy*
+The model for Random forest has accuracy of *99.39%* while decision trees only get *74.24%*. Random forest will be used as the final model.
+
+Prediction for problem_id
+```{r, echo=FALSE}
+predict(modelFit.rf, newdata = testing, type = "class")
+```
+
